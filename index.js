@@ -20,6 +20,11 @@ mongoClient.connect().then(() => {
 });
 
 const nameSchema = joi.object({ name: joi.string().required() });
+const messageSchema = joi.object({
+  to: joi.string().required(),
+  text: joi.string().required(),
+  type: joi.valid("message", "private_message").required(),
+});
 
 /* Participants Routes */
 server.post("/participants", async (req, res) => {
@@ -69,22 +74,58 @@ server.get("/participants", async (req, res) => {
 
 /* Messages Routes */
 server.post("/messages", async (req, res) => {
+  const { to, text, type } = req.body;
+  const { user } = req.headers;
+
+  const validationBody = messageSchema.validate(req.body);
+  if (validationBody.error) {
+    console.log(validationBody.error);
+    res.sendStatus(422);
+    return;
+  }
+  if (db.collection("participants").findOne(req.headers) === null) {
+    res.sendStatus(422);
+    return;
+  }
+
   try {
-  } catch (error) {}
-  res.send([]);
+    await db
+      .collection("messages")
+      .insertOne({ from: user, to, text, type, time: day });
+    res.sendStatus(201);
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500);
+  }
 });
 
 server.get("/messages", async (req, res) => {
   try {
-  } catch (error) {}
-  res.send([]);
+    const { user } = req.headers;
+
+    const messages = await db
+      .collection("messages")
+      .find({
+        $or: [
+          { type: "message" },
+          { type: "status" },
+          { to: user },
+          { from: user },
+        ],
+      })
+      .toArray();
+    res.send(messages);
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500);
+  }
 });
 
 /* Status Routes */
 server.post("/status", async (req, res) => {
   try {
+    res.send([]);
   } catch (error) {}
-  res.send([]);
 });
 
 server.listen(5000);
