@@ -32,7 +32,6 @@ server.post("/participants", async (req, res) => {
 
   const validation = nameSchema.validate(req.body);
   if (validation.error) {
-    console.log(validation.error);
     res.sendStatus(422);
     return;
   }
@@ -79,11 +78,15 @@ server.post("/messages", async (req, res) => {
 
   const validationBody = messageSchema.validate(req.body);
   if (validationBody.error) {
-    console.log(validationBody.error);
     res.sendStatus(422);
     return;
   }
-  if (db.collection("participants").findOne(req.headers) === null) {
+
+  const checkUsers = await db
+    .collection("participants")
+    .findOne({ name: user });
+
+  if (checkUsers === null) {
     res.sendStatus(422);
     return;
   }
@@ -100,9 +103,8 @@ server.post("/messages", async (req, res) => {
 });
 
 server.get("/messages", async (req, res) => {
+  const { user } = req.headers;
   try {
-    const { user } = req.headers;
-
     const messages = await db
       .collection("messages")
       .find({
@@ -123,9 +125,45 @@ server.get("/messages", async (req, res) => {
 
 /* Status Routes */
 server.post("/status", async (req, res) => {
+  const { user } = req.headers;
   try {
-    res.send([]);
-  } catch (error) {}
+    const userCheck = await db
+      .collection("participants")
+      .findOne({ name: user });
+
+    if (userCheck === null) {
+      res.sendStatus(404);
+    }
+    await db
+      .collection("participants")
+      .updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500);
+  }
 });
+
+setInterval(async () => {
+  const backTime = Date.now() - 10000;
+  const toDelete = await db
+    .collection("participants")
+    .find({ lastStatus: { $lt: backTime } })
+    .toArray();
+
+  if (toDelete !== null) {
+    toDelete.map(async (e) => {
+      await db.collection("participants").deleteOne(e);
+      await db.collection("messages").insertOne({
+        from: e.name,
+        to: "Todos",
+        text: "sai da sala...",
+        type: "status",
+        time: day,
+      });
+    });
+  }
+}, 15000);
 
 server.listen(5000);
