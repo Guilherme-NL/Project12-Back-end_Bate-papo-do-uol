@@ -103,9 +103,10 @@ server.post("/messages", async (req, res) => {
 });
 
 server.get("/messages", async (req, res) => {
+  const limit = parseInt(req.query.limit);
   const { user } = req.headers;
   try {
-    const messages = await db
+    let messages = await db
       .collection("messages")
       .find({
         $or: [
@@ -116,7 +117,12 @@ server.get("/messages", async (req, res) => {
         ],
       })
       .toArray();
-    res.send(messages);
+    if (limit === undefined) {
+      res.send(messages);
+    } else {
+      messages = messages.slice(-limit);
+      res.send(messages);
+    }
   } catch (error) {
     console.error(error);
     res.sendStatus(500);
